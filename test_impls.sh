@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-echo "Single + Stream"
-time ./1brc.single.stream.exs
-echo "Workers + Stream"
-time ./1brc.workers.stream.exs
-
-echo "Single + Reduce"
-time ./1brc.single.reduce.exs
-echo "Workers + Reduce"
-time ./1brc.workers.reduce.exs
+rm -rf out/src/*.log
+mkdir -p out/src
+for f in ./src/*.exs ; do
+	echo $f
+	time $($f > out/$f.log)
+done

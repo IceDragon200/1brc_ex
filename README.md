@@ -2,11 +2,16 @@
 
 The files only operate on a small dataset of 50 million lines, but it should scale linearly to 1 billion lines.
 
-Four implementations were created to test different ways of doing effectively the same task.
+Each implementation is a permutation that seeks to experiment or optimize with a particular function or pattern.
 
-`*.reduce.exs` files manually call `IO.read(device, :line)` to pull a line from the file stream, this is considerably slower than just using `File.stream(filename, :line)`
-`*.stream.exs` files use Elixir's Streams to extract lines from the file, these are considerably faster than manually reduce using IO.read
+Files in the `src/` directory are those that are contenders for the best performance.
 
-## Testing
+Files in the `disq/` were implementations that didn't quite match up to the needed performance of those found in `src/`.
 
-Simply symlink or copy your generated measurements.txt into the directory with the script and run anyone of them to your liking.
+## Setup
+
+Either copy or symlink your measurements.txt into the root directory of this repo, then run a file from the src/ or disq/ directories.
+
+```bash
+ln -sf /data/1brc/measurements.txt ./measurements.txt
+```

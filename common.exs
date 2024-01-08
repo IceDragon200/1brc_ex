@@ -1,4 +1,16 @@
-defmodule Output do
+defmodule ReadMeasurements do
+  def worker_count do
+    :erlang.system_info(:logical_processors) * 4
+  end
+
+  def chunk_size do
+    1_000_000
+  end
+
+  def blob_size do
+    0x1_000_000
+  end
+
   def output(result) do
     [
       "{",
