@@ -1,5 +1,10 @@
 #!/usr/bin/env -S mix run --no-mix-exs
 Code.require_file("common.exs")
+Code.ensure_loaded(Map)
+Code.ensure_loaded(Enum)
+Code.ensure_loaded(:prim_file)
+Code.ensure_loaded(:erlang)
+Code.ensure_loaded(:binary)
 
 defmodule ReadMeasurements.App do
   def main do

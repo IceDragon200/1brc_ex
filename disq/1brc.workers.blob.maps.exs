@@ -1,5 +1,12 @@
 #!/usr/bin/env -S mix run --no-mix-exs
 Code.require_file("common.exs")
+Code.ensure_loaded(Map)
+Code.ensure_loaded(Enum)
+Code.ensure_loaded(:prim_file)
+Code.ensure_loaded(:erlang)
+Code.ensure_loaded(:binary)
+
+# require ReadMeasurements
 
 defmodule ReadMeasurements.App do
   def main do
@@ -17,20 +24,25 @@ defmodule ReadMeasurements.App do
       end)
     end)
 
-    {:ok, file} = File.open(filename, [:binary, :read])
+    {:ok, file} = :prim_file.open(filename, [:binary, :read])
     result =
       try do
         read_file(file, workers)
       after
-        File.close(file)
+        :prim_file.close(file)
       end
 
-    ReadMeasurements.output(result)
+    result
+    |> Enum.map(fn {ws, {min, mean, max}} ->
+      # we were working in fixed point to we need to turn these back into floats for the output
+      {ws, {min/10.0, mean/10.0, max/10.0}}
+    end)
+    |> ReadMeasurements.output()
   end
 
   def worker_main(parent, [bin | rest], result) do
     [ws, temp] = :binary.split(bin, ";")
-    temp = :erlang.binary_to_float(temp)
+    temp = binary_to_fixed_point(temp)
 
     worker_main(
       parent,
@@ -98,7 +110,7 @@ defmodule ReadMeasurements.App do
 
   def do_read_file(file, workers, rest, c, acc) do
     # dropping down to barebones file to skip some of the overhead
-    case :file.read(file, ReadMeasurements.blob_size()) do
+    case :prim_file.read(file, ReadMeasurements.blob_size()) do
       :eof ->
         case rest do
           "" ->
@@ -120,6 +132,30 @@ defmodule ReadMeasurements.App do
         {rest, c, acc}
     end
   end
+
+  defmacrop char_to_num(c) do
+    quote do
+      unquote(c) - ?0
+    end
+  end
+
+  defp binary_to_fixed_point(<<?-, d2, d1, ?., d01>>) do
+    -(char_to_num(d2) * 100 + char_to_num(d1) * 10 + char_to_num(d01))
+  end
+
+  defp binary_to_fixed_point(<<?-, d1, ?., d01>>) do
+    -(char_to_num(d1) * 10 + char_to_num(d01))
+  end
+
+  defp binary_to_fixed_point(<<d2, d1, ?., d01>>) do
+    char_to_num(d2) * 100 + char_to_num(d1) * 10 + char_to_num(d01)
+  end
+
+  defp binary_to_fixed_point(<<d1, ?., d01>>) do
+    char_to_num(d1) * 10 + char_to_num(d01)
+  end
 end
 
-ReadMeasurements.App.main()
+# ReadMeasurements.with_profiling do
+  ReadMeasurements.App.main()
+# end
