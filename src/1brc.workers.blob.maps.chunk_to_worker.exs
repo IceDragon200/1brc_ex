@@ -33,9 +33,9 @@ defmodule ReadMeasurements.App do
       end
 
     result
-    |> Enum.map(fn {ws, {min, mean, max}} ->
+    |> Enum.map(fn {ws, {count, total, min, max}} ->
       # we were working in fixed point to we need to turn these back into floats for the output
-      {ws, {min/10.0, mean/10.0, max/10.0}}
+      {ws, {min / 10.0, (total / count) / 10.0, max / 10.0}}
     end)
     |> ReadMeasurements.output()
   end
@@ -61,10 +61,10 @@ defmodule ReadMeasurements.App do
       rest,
       case Map.fetch(result, ws) do
         :error ->
-          Map.put(result, ws, {temp, temp, temp})
+          Map.put(result, ws, {1, temp, temp, temp})
 
-        {:ok, {mn, mean, mx}} ->
-          Map.put(result, ws, {min(mn, temp), (mean+temp)/2, max(mx, temp)})
+        {:ok, {count, total, mn, mx}} ->
+          Map.put(result, ws, {count + 1, total + temp, min(mn, temp), max(mx, temp)})
       end
     )
   end
@@ -84,13 +84,13 @@ defmodule ReadMeasurements.App do
       send(worker, :eos)
       receive do
         {:result, result2} ->
-          Enum.reduce(result2, result, fn {ws, {rmin, rmean, rmax} = row}, result ->
+          Enum.reduce(result2, result, fn {ws, {rcount, rtotal, rmin, rmax} = row}, result ->
             case Map.fetch(result, ws) do
               :error ->
                 Map.put(result, ws, row)
 
-              {:ok, {rmin2, rmean2, rmax2}} ->
-                Map.put(result, ws, {min(rmin, rmin2), (rmean + rmean2) / 2, max(rmax, rmax2)})
+              {:ok, {rcount2, rtotal2, rmin2, rmax2}} ->
+                Map.put(result, ws, {rcount + rcount2, rtotal + rtotal2, min(rmin, rmin2), max(rmax, rmax2)})
             end
           end)
       end
