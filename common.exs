@@ -13,7 +13,10 @@ defmodule ReadMeasurements do
   end
 
   def worker_count do
-    :erlang.system_info(:logical_processors) * 4
+    # Once upon a time, I cranked this up 4x whatever the logical processors were
+    # the bad news: this is a waste of resources as the processes will now fight over the CPUs
+    # Instead it should probably be 1:1
+    :erlang.system_info(:logical_processors)
   end
 
   def chunk_size do

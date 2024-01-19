@@ -20,11 +20,11 @@ defmodule ReadMeasurements.App do
 
     workers = Enum.map(1..worker_count, fn _ ->
       spawn_link(fn ->
-        worker_main(parent, "", %{})
+        worker_main(parent, "")
       end)
     end)
 
-    {:ok, file} = :prim_file.open(filename, [:binary, :read])
+    {:ok, file} = :prim_file.open(filename, [:raw, :binary, :read])
     result =
       try do
         read_file(file, workers)
@@ -40,32 +40,24 @@ defmodule ReadMeasurements.App do
     |> ReadMeasurements.output()
   end
 
-  def worker_main(parent, <<>>, result) do
+  def worker_main(parent, <<>>) do
     send(parent, {:checkin, self()})
     receive do
       :eos ->
-        send(parent, {:result, result})
+        # we don't have to care about the type unlike the erlang version
+        # so we can just take the process dictionary as is
+        send(parent, {:result, :erlang.get()})
         :ok
 
       {:chunk, bin} ->
-        worker_main(parent, bin, result)
+        worker_main(parent, bin)
     end
   end
 
-  def worker_main(parent, rest, result) do
-    [ws, rest] = :binary.split(rest, ";")
-    {temp, <<"\n",rest::binary>>} = binary_split_to_fixed_point(rest)
-
+  def worker_main(parent, rest) do
     worker_main(
       parent,
-      rest,
-      case Map.fetch(result, ws) do
-        :error ->
-          Map.put(result, ws, {1, temp, temp, temp})
-
-        {:ok, {count, total, mn, mx}} ->
-          Map.put(result, ws, {count + 1, total + temp, min(mn, temp), max(mx, temp)})
-      end
+      process_line(rest)
     )
   end
 
@@ -124,26 +116,54 @@ defmodule ReadMeasurements.App do
     end
   end
 
+  defp process_line(rest) do
+    parse_weather_station(rest, rest, 0)
+  end
+
+  defp parse_weather_station(bin, <<";",_rest::binary>>, count) do
+    <<ws::binary-size(count), ";", rest::binary>> = bin
+    parse_temp(rest, ws)
+  end
+
+  defp parse_weather_station(bin, <<_c,rest::binary>>, count) do
+    parse_weather_station(bin, rest, count + 1)
+  end
+
   defmacrop char_to_num(c) do
     quote do
-      unquote(c) - ?0
+      (unquote(c) - ?0)
     end
   end
 
-  defp binary_split_to_fixed_point(<<?-, d2, d1, ?., d01, rest::binary>>) do
-    {-(char_to_num(d2) * 100 + char_to_num(d1) * 10 + char_to_num(d01)), rest}
+  defp parse_temp(<<?-, d2, d1, ?., d01, "\n", rest::binary>>, ws) do
+    commit_entry(ws, -(char_to_num(d2) * 100 + char_to_num(d1) * 10 + char_to_num(d01)))
+    rest
   end
 
-  defp binary_split_to_fixed_point(<<?-, d1, ?., d01, rest::binary>>) do
-    {-(char_to_num(d1) * 10 + char_to_num(d01)), rest}
+  defp parse_temp(<<?-, d1, ?., d01, "\n", rest::binary>>, ws) do
+    commit_entry(ws, -(char_to_num(d1) * 10 + char_to_num(d01)))
+    rest
   end
 
-  defp binary_split_to_fixed_point(<<d2, d1, ?., d01, rest::binary>>) do
-    {char_to_num(d2) * 100 + char_to_num(d1) * 10 + char_to_num(d01), rest}
+  defp parse_temp(<<d2, d1, ?., d01, "\n", rest::binary>>, ws) do
+    commit_entry(ws, char_to_num(d2) * 100 + char_to_num(d1) * 10 + char_to_num(d01))
+    rest
   end
 
-  defp binary_split_to_fixed_point(<<d1, ?., d01, rest::binary>>) do
-    {char_to_num(d1) * 10 + char_to_num(d01), rest}
+  defp parse_temp(<<d1, ?., d01, "\n", rest::binary>>, ws) do
+    commit_entry(ws, char_to_num(d1) * 10 + char_to_num(d01))
+    rest
+  end
+
+  defp commit_entry(ws, temp) do
+    # write it to the process dictionary
+    case :erlang.get(ws) do
+      :undefined ->
+        :erlang.put(ws, {1, temp, temp, temp})
+
+      {count, total, mn, mx} ->
+        :erlang.put(ws, {count + 1, total + temp, min(mn, temp), max(mx, temp)})
+    end
   end
 end
 
